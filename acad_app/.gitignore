@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.env
+.streamlit/secrets.toml
+chroma_db/
+outputs/
+*.zip
+.DS_Store
