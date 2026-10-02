@@ -17,10 +17,10 @@ def render():
         st.subheader("1. Gemini API key")
         key, source = find_api_key()
         if key:
-            st.success(f"A key is in use (from {source}, ends in ...{key[-4:]}).",
+            st.success(f"OK: a key is in use (from {source}, ends in ...{key[-4:]}).",
                        icon=":material/check_circle:")
         else:
-            st.error("No key found yet.", icon=":material/error:")
+            st.error("Problem: no key found yet.", icon=":material/error:")
 
         st.caption("Get a free key at aistudio.google.com/apikey. No credit card needed.")
         new_key = st.text_input("Paste your key here", type="password", key="key_input")
@@ -30,7 +30,7 @@ def render():
                 settings.pop("models", None)
                 st.rerun()
             else:
-                st.warning("The box is empty. Paste your key first.")
+                st.warning("Warning: the box is empty. Paste your key first.")
         st.caption("This only lasts until you close the browser tab. To keep it, add the line "
                    "GEMINI_API_KEY = \"your-key\" to the file .streamlit/secrets.toml.")
 
@@ -41,9 +41,9 @@ def render():
             with st.spinner("Asking Gemini which models your key can use..."):
                 try:
                     settings["models"] = list_models(key)
-                    st.success(f"Your key works. {len(settings['models'])} models available.")
+                    st.success(f"OK: your key works. {len(settings['models'])} models available.")
                 except SynthesisError as err:
-                    st.error(str(err))
+                    st.error(f"Problem: {err}")
 
         options = settings.get("models") or [DEFAULT_MODEL, "gemini-2.5-flash"]
         current = settings.get("model", DEFAULT_MODEL)
@@ -59,7 +59,7 @@ def render():
         st.subheader("3. Your PDF library")
         stats = source_stats()
         if not stats:
-            st.info("No PDFs yet. Add them on the New query page.", icon=":material/info:")
+            st.info("Note: no PDFs yet. Add them on the New query page.", icon=":material/info:")
         else:
             st.caption(f"{len(stats)} PDF(s), {sum(stats.values())} passages in total.")
             for name, chunks in stats.items():

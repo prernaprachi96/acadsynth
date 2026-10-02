@@ -1,10 +1,28 @@
-# Theme for AcadSynth. Streamlit reads this automatically on start.
+# Black and white theme for AcadSynth. Streamlit reads this automatically.
 # (Your API key stays in .streamlit/secrets.toml - this file has no secrets.)
 
 [theme]
 base = "light"
-primaryColor = "#0F5C4D"
-backgroundColor = "#F6F7F9"
-secondaryBackgroundColor = "#E8EDF0"
-textColor = "#172026"
+primaryColor = "#000000"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F0F0"
+textColor = "#000000"
+linkColor = "#000000"
+borderColor = "#000000"
+showWidgetBorder = true
+baseRadius = "small"
 font = "sans serif"
+
+# Keep status colours black and white too
+redColor = "#000000"
+orangeColor = "#000000"
+yellowColor = "#000000"
+greenColor = "#000000"
+blueColor = "#000000"
+violetColor = "#000000"
+grayColor = "#000000"
+
+[theme.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F0F0"
+textColor = "#000000"

@@ -9,6 +9,9 @@ package is deprecated). If the chosen model is not available for your
 key, it automatically tries another Flash model and tells you which.
 """
 
+import re
+import time
+
 from utils.config import DEFAULT_MODEL, get_api_key, get_model
 
 
@@ -18,16 +21,24 @@ class SynthesisError(Exception):
 
 SYSTEM_PROMPT = """You are an academic research synthesizer for university-level work.
 
+You are given source excerpts of two kinds: documents the user uploaded ([PDF Source n])
+and web results ([Web Source n]).
+
 Rules:
-- Use only the provided source excerpts. Do not invent facts or sources.
-- Cite every claim with the label of the source, e.g. [PDF Source 1] or [Web Source 2].
+- Use only the provided excerpts. Do not invent facts or sources.
+- Cite every claim with the label of its source, e.g. [PDF Source 1] or [Web Source 2].
 - Paraphrase and combine ideas. Do not copy text word for word.
-- Structure the answer with 3 to 5 short sections. Start each section with a markdown
-  heading (## Heading), e.g. Overview, Key findings, Open questions.
-- Under each heading write one or two flowing paragraphs (no bullet points).
+- If the question is general (for example "describe this" or "summarize"), describe the
+  uploaded document itself: what it is, its purpose, and its main content.
+- Start with "## Summary", then write 2 to 4 more sections. Every section starts with a
+  markdown heading (## Heading) and has one or two flowing paragraphs (no bullet points).
+- Content from the user's documents comes first. If web sources are provided, put the
+  web-based material in its own section titled "## Additional context from the web".
+  Use it only for background or checks that add to the document content, and keep it
+  clearly separate. If no web sources are provided, do not add that section.
 - If the sources do not contain enough information, say so clearly.
-- Finish with a "## References" section: a numbered list of the sources you cited,
-  each with its label, title or file name, and URL if one was given.
+- Finish with "## References": a numbered list of the sources you cited, each with its
+  label, title or file name, and URL if one was given.
 """
 
 STYLE_INSTRUCTIONS = {
@@ -53,21 +64,28 @@ def _make_client(api_key: str):
     return genai.Client(api_key=api_key)
 
 
+def _is_busy(err: Exception) -> bool:
+    low = str(err).lower()
+    return any(w in low for w in ("503", "unavailable", "overloaded", "high demand"))
+
+
 def _friendly(err: Exception) -> str:
     """Turn a raw Gemini error into something you can act on."""
     text = str(err)
     low = text.lower()
+    detail = f"\n\nDetails from Gemini: {text[:250]}"
     if "api key" in low or "api_key" in low or "permission_denied" in low or "401" in low or "403" in low:
         return ("Gemini did not accept your API key. Open Settings, paste the key again "
-                "(from aistudio.google.com/apikey), then press 'Check key and load models'.")
+                "(from aistudio.google.com/apikey), then press 'Check key and load models'." + detail)
     if "429" in low or "resource_exhausted" in low or "quota" in low:
         return ("You hit Gemini's free usage limit. Wait a minute and try again, "
-                "or pick a different model in Settings.")
-    if "503" in low or "unavailable" in low or "overloaded" in low:
-        return "Gemini is busy right now. Wait a moment and press Create document again."
+                "or pick a different model in Settings." + detail)
+    if _is_busy(err):
+        return ("Gemini is overloaded right now, even after retrying other models. "
+                "Wait a minute and press Create document again." + detail)
     if "timed out" in low or "connect" in low or "network" in low:
-        return "Could not reach Gemini. Check your internet connection and try again."
-    return f"Gemini returned an error: {text[:300]}"
+        return "Could not reach Gemini. Check your internet connection and try again." + detail
+    return "Gemini returned an error." + detail
 
 
 def _is_model_not_found(err: Exception) -> bool:
@@ -97,24 +115,13 @@ def list_models(api_key: str) -> list:
         raise SynthesisError(_friendly(e))
 
 
-def _pick_fallback(client, tried: str):
-    try:
-        names = list_models_with_client(client)
-    except Exception:
-        return None
-    for n in names:
-        if n != tried and "flash" in n and "lite" not in n:
-            return n
-    return None
-
-
-def _generate(client, model: str, prompt: str) -> str:
+def _generate(client, model: str, prompt: str, system: str = None) -> str:
     from google.genai import types
     response = client.models.generate_content(
         model=model,
         contents=prompt,
         config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
+            system_instruction=system or SYSTEM_PROMPT,
             temperature=0.3,
         ),
     )
@@ -127,12 +134,77 @@ def _generate(client, model: str, prompt: str) -> str:
     return text
 
 
+# ── Planning the web search ───────────────────────────────────────────────────
+
+PLANNER_SYSTEM = "You write short web search queries. Output only the queries, one per line."
+
+
+def plan_web_queries(question: str, excerpt: str) -> list:
+    """
+    Ask Gemini what to look up on the web to add background to the user's PDFs.
+    Returns up to 3 short queries, or [] if Gemini cannot be reached
+    (the caller then falls back to a simpler search).
+    """
+    api_key = get_api_key()
+    if not api_key:
+        return []
+
+    prompt = (
+        f'A student uploaded a document and asked: "{question}"\n\n'
+        f"Excerpt of the document:\n{excerpt[:6000]}\n\n"
+        "Write 2 or 3 short web search queries (at most 8 words each) that would find "
+        "background or up-to-date information to help answer the question: for example "
+        "explanations of technologies, concepts, organisations or standards mentioned in "
+        "the document.\n"
+        "Rules: never include personal names, email addresses, phone numbers or street "
+        "addresses. No quotation marks. One query per line. Output only the queries."
+    )
+
+    try:
+        client = _make_client(api_key)
+        model = get_model() or DEFAULT_MODEL
+        raw = ""
+        for attempt in range(2):
+            try:
+                raw = _generate(client, model, prompt, system=PLANNER_SYSTEM)
+                break
+            except Exception as err:
+                if _is_busy(err) and attempt == 0:
+                    time.sleep(2)
+                    continue
+                return []
+    except Exception:
+        return []
+
+    queries = []
+    for line in raw.splitlines():
+        q = re.sub(r"^[\s\-\*\d\.\)]+", "", line).strip().strip("\"'`")
+        if 3 <= len(q) <= 120 and q.lower() not in [x.lower() for x in queries]:
+            queries.append(q)
+    return queries[:3]
+
+
 # ── Main function ─────────────────────────────────────────────────────────────
+
+def _candidate_models(client, chosen: str) -> list:
+    """The chosen model first, then up to two other Flash models as backups."""
+    candidates = [chosen]
+    try:
+        for name in list_models_with_client(client):
+            if name not in candidates and "flash" in name and "lite" not in name:
+                candidates.append(name)
+            if len(candidates) >= 3:
+                break
+    except Exception:
+        pass
+    return candidates
+
 
 def synthesize(query: str, sources_text: str, style: str = "Academic / formal"):
     """
     Returns (synthesis_text, model_used).
-    Raises SynthesisError with a clear message if something goes wrong.
+    Retries when Gemini is busy, then tries backup models.
+    Raises SynthesisError with a clear message if everything fails.
     """
     api_key = get_api_key()
     if not api_key:
@@ -147,24 +219,28 @@ def synthesize(query: str, sources_text: str, style: str = "Academic / formal"):
     )
 
     client = _make_client(api_key)
-    model = get_model() or DEFAULT_MODEL
+    chosen = get_model() or DEFAULT_MODEL
+    last_error = None
 
-    try:
-        return _generate(client, model, prompt), model
-    except SynthesisError:
-        raise
-    except Exception as first_error:
-        if _is_model_not_found(first_error):
-            alt = _pick_fallback(client, model)
-            if alt:
-                try:
-                    return _generate(client, alt, prompt), alt
-                except SynthesisError:
-                    raise
-                except Exception as second_error:
-                    raise SynthesisError(_friendly(second_error))
-            raise SynthesisError(
-                f"The model '{model}' is not available for your key. "
-                "Open Settings and press 'Check key and load models' to choose one that is."
-            )
-        raise SynthesisError(_friendly(first_error))
+    for model in _candidate_models(client, chosen):
+        for attempt in range(3):                 # up to 3 tries per model
+            try:
+                return _generate(client, model, prompt), model
+            except SynthesisError:
+                raise
+            except Exception as err:
+                last_error = err
+                if _is_busy(err) and attempt < 2:
+                    time.sleep(2 * (attempt + 1))   # wait 2s, then 4s, then retry
+                    continue
+                if _is_busy(err) or _is_model_not_found(err):
+                    break                          # go to the next backup model
+                raise SynthesisError(_friendly(err))   # key / quota / other: stop now
+
+    if last_error is not None and _is_model_not_found(last_error):
+        raise SynthesisError(
+            f"The model '{chosen}' is not available for your key. "
+            "Open Settings and press 'Check key and load models' to choose one that is."
+            f"\n\nDetails from Gemini: {str(last_error)[:250]}"
+        )
+    raise SynthesisError(_friendly(last_error) if last_error else "Gemini did not respond.")

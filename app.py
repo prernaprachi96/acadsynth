@@ -13,16 +13,53 @@ from utils import nav                      # noqa: E402
 from utils.config import find_api_key      # noqa: E402
 from views import home, query, results, settings  # noqa: E402
 
-# Colours come from .streamlit/config.toml. This only adds a heading font
-# and keeps the text column a comfortable reading width.
+# Colours come from .streamlit/config.toml. This CSS only makes sure that
+# everything is pure black on white with clearly visible text.
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@600;700&display=swap');
-    h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif !important;
-                 letter-spacing: -0.01em; }
+    h1, h2, h3 { font-family: Georgia, 'Times New Roman', serif !important;
+                 letter-spacing: -0.01em; color: #000 !important; }
     .block-container, [data-testid="stMainBlockContainer"] { max-width: 920px; }
     footer { visibility: hidden; }
+
+    /* Page and sidebar */
+    html, body, .stApp, [data-testid="stApp"] { background: #fff !important; color: #000 !important; }
+    [data-testid="stSidebar"] { background: #fff !important; border-right: 2px solid #000; }
+    [data-testid="stSidebar"] * { color: #000 !important; }
+    [data-testid="stSidebarNavLink"][aria-current="page"],
+    [data-testid="stSidebarNav"] a[aria-current="page"] { background: #000 !important; }
+    [data-testid="stSidebarNavLink"][aria-current="page"] *,
+    [data-testid="stSidebarNav"] a[aria-current="page"] * { color: #fff !important; }
+
+    /* Text that is easy to miss: captions, hints, placeholders */
+    [data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] * {
+        color: #1a1a1a !important; opacity: 1 !important; }
+    ::placeholder { color: #444 !important; opacity: 1 !important; }
+    a { color: #000 !important; text-decoration: underline !important; }
+
+    /* Cards, inputs, uploader */
+    [data-testid="stVerticalBlockBorderWrapper"] { border: 1.5px solid #000 !important; background: #fff !important; }
+    textarea, input, [data-baseweb="select"] > div, [data-baseweb="textarea"], [data-baseweb="input"] {
+        background: #fff !important; color: #000 !important; border: 1.5px solid #000 !important; }
+    [data-testid="stFileUploaderDropzone"] { background: #fff !important; border: 1.5px dashed #000 !important; }
+    [data-testid="stFileUploaderDropzone"] * { color: #000 !important; }
+    [data-testid="stExpander"] { border: 1.5px solid #000 !important; background: #fff !important; }
+    [data-testid="stStatus"], [data-testid="stStatusWidget"] { border: 1.5px solid #000 !important; background: #fff !important; }
+
+    /* Messages (success / error / warning / info): white box, black border, black text */
+    [data-testid="stAlert"] { background: #fff !important; border: 2px solid #000 !important; }
+    [data-testid="stAlertContainer"] { background: transparent !important; }
+    [data-testid="stAlert"] * { color: #000 !important; }
+
+    /* Buttons: main action = black with white text, others = white with black text */
+    button[kind="primary"], [data-testid^="stBaseButton-primary"] {
+        background: #000 !important; border: 2px solid #000 !important; }
+    button[kind="primary"] *, [data-testid^="stBaseButton-primary"] * { color: #fff !important; }
+    button[kind="secondary"], [data-testid^="stBaseButton-secondary"] {
+        background: #fff !important; border: 2px solid #000 !important; }
+    button[kind="secondary"] *, [data-testid^="stBaseButton-secondary"] * { color: #000 !important; }
+    button:disabled { opacity: 0.45 !important; }
     </style>
     """,
     unsafe_allow_html=True,

@@ -2,7 +2,8 @@
 import streamlit as st
 
 from utils import agents, nav
-from utils.config import DEPTH_OPTIONS, FORMAT_OPTIONS, STYLE_OPTIONS, find_api_key
+from utils.config import (DEPTH_OPTIONS, FORMAT_OPTIONS, SOURCE_MODES,
+                          STYLE_OPTIONS, find_api_key)
 from utils.ingestor import ingest_pdf, source_stats
 from utils.ui import sources_markdown
 
@@ -13,7 +14,7 @@ def render():
 
     has_key = bool(find_api_key()[0])
     if not has_key:
-        st.error("Add your Gemini API key first. Without it the app cannot write the document.",
+        st.error("Problem: add your Gemini API key first. Without it the app cannot write the document.",
                  icon=":material/error:")
         if st.button("Go to Settings", key="query_goto_settings"):
             nav.go("settings")
@@ -39,9 +40,22 @@ def render():
         with st.form("query_form", border=False):
             question = st.text_area(
                 "Your research question",
-                placeholder="Example: How do transformers handle long documents compared with recurrent networks?",
+                placeholder="Example: What are the main skills and projects in this resume?",
                 height=120,
             )
+
+            mode = st.radio(
+                "Sources to use", list(SOURCE_MODES), horizontal=True,
+                format_func=SOURCE_MODES.get,
+                help="'My PDFs and the web' reads your PDFs first, then adds background "
+                     "from the web as a separate section of the report.",
+            )
+            if stats:
+                pdf_files = st.multiselect("PDFs to use", list(stats), default=list(stats))
+            else:
+                pdf_files = []
+                st.caption("No PDFs in your library, so only the web will be searched.")
+
             c1, c2, c3 = st.columns(3)
             fmt = c1.selectbox("Document type", list(FORMAT_OPTIONS),
                                format_func=FORMAT_OPTIONS.get)
@@ -50,8 +64,6 @@ def render():
                                  help="'Per source' means up to this many passages from your "
                                       "PDFs and up to this many results from the web.")
             style = c3.selectbox("Writing style", STYLE_OPTIONS)
-            use_web = st.checkbox("Also search the web", value=True,
-                                  help="Adds web results next to your PDFs. Free, no key needed.")
             submitted = st.form_submit_button("Create document", type="primary",
                                               disabled=not has_key)
 
@@ -60,18 +72,20 @@ def render():
         st.subheader("3. Your document")
 
         if submitted:
-            if len(question.strip()) < 10:
-                st.warning("Write your research question in step 2 first (at least a full sentence).")
+            if len(question.strip()) < 3:
+                st.warning("Warning: write your question in step 2 first.")
                 return
             config = {
                 "format": fmt,
                 "depth_label": DEPTH_OPTIONS[depth][0],
                 "top_k": DEPTH_OPTIONS[depth][1],
                 "style": style,
-                "use_web": use_web,
+                "use_pdf": mode in ("both", "pdf"),
+                "use_web": mode in ("both", "web"),
+                "pdf_files": pdf_files,
             }
             if not _run(question.strip(), config):
-                return  # the error is already on screen
+                return  # the message is already on screen
 
         run = st.session_state.get("last_run")
         if run:
@@ -92,9 +106,9 @@ def _handle_uploads(files):
                 log[key] = ingest_pdf(f.getvalue(), f.name)
         res = log[key]
         if res["status"] == "ok":
-            st.success(f"{f.name}: added {res['chunks']} passages to your library.")
+            st.success(f"Done: {f.name} added ({res['chunks']} passages).")
         else:
-            st.error(f"{f.name}: {res['message']}")
+            st.error(f"Problem: {f.name}. {res['message']}")
 
 
 def _run(question: str, config: dict) -> bool:
@@ -105,15 +119,20 @@ def _run(question: str, config: dict) -> bool:
             st.markdown(f"**{name}**: {description}...")
             try:
                 message = agents.run_step(name, question, config, ctx)
+            except agents.PdfMismatch as err:
+                status.update(label="Stopped: your question did not match your PDFs",
+                              state="error", expanded=True)
+                st.warning(f"Warning: {err}")
+                return False
             except agents.PipelineError as err:
                 status.update(label=f"Stopped at the {name} step", state="error", expanded=True)
-                st.error(str(err))
+                st.error(f"Problem: {err}")
                 return False
             except Exception as err:  # anything unexpected
                 status.update(label=f"Stopped at the {name} step", state="error", expanded=True)
-                st.error(f"Something unexpected went wrong in the {name} step: {err}")
+                st.error(f"Problem: something unexpected went wrong in the {name} step: {err}")
                 return False
-            st.markdown(f":material/check: {message}")
+            st.markdown(f"Done: {message}")
         status.update(label="Done. Your document is ready.", state="complete", expanded=False)
 
     data, filename, mime = ctx["file"]

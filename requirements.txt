@@ -1,5 +1,5 @@
-# UI (needs 1.40+ for the sidebar navigation used in app.py)
-streamlit>=1.40.0
+# UI (1.50+ needed for the theme options and the sidebar navigation)
+streamlit>=1.50.0
 
 # Gemini (the old "google-generativeai" package is deprecated)
 google-genai>=1.0.0

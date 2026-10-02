@@ -17,7 +17,7 @@ from utils.config import find_api_key
 from utils.formatter import format_output
 from utils.history import save_run
 from utils.ingestor import source_count
-from utils.researcher import research
+from utils.researcher import NoPdfMatch, research
 from utils.synthesizer import SynthesisError, synthesize
 
 STEPS = [
@@ -32,6 +32,10 @@ class PipelineError(Exception):
     """A problem with a plain-English fix, safe to show directly."""
 
 
+class PdfMismatch(PipelineError):
+    """The question did not match the selected PDFs (shown as a warning)."""
+
+
 def run_step(agent_name: str, query: str, config: dict, ctx: dict) -> str:
     """Run one agent. Returns a short sentence describing what it did."""
 
@@ -40,26 +44,42 @@ def run_step(agent_name: str, query: str, config: dict, ctx: dict) -> str:
             raise PipelineError(
                 "No Gemini API key yet. Open Settings, paste your key, and press Save key."
             )
-        n_chunks = source_count()
-        if n_chunks == 0 and not config["use_web"]:
+        has_library = source_count() > 0
+        if config["use_pdf"] and not has_library and not config["use_web"]:
             raise PipelineError(
-                "There is nothing to search. Upload a PDF in step 1, "
-                "or tick 'Also search the web' in step 2."
+                "You chose 'Only my PDFs' but your library is empty. Upload a PDF in step 1."
             )
+        if config["use_pdf"] and has_library and not config["pdf_files"]:
+            raise PipelineError(
+                "No PDF is selected. In step 2, pick at least one PDF under 'PDFs to use', "
+                "or choose 'Only the web'."
+            )
+        use_pdf = config["use_pdf"] and has_library
         where = []
-        if n_chunks:
-            where.append("your PDFs")
+        if use_pdf:
+            where.append(f"{len(config['pdf_files'])} PDF(s)")
         if config["use_web"]:
             where.append("the web")
-        return (f"Will search {' and '.join(where)}, then write in "
+        return (f"Will use {' and '.join(where)}, then write in "
                 f"'{config['style']}' style as a {config['format']} file.")
 
     if agent_name == "Researcher":
-        result = research(query, top_k=config["top_k"], use_web=config["use_web"])
+        use_pdf = config["use_pdf"] and bool(config["pdf_files"])
+        try:
+            result = research(query, top_k=config["top_k"], use_pdf=use_pdf,
+                              use_web=config["use_web"], pdf_files=config["pdf_files"])
+        except NoPdfMatch as err:
+            raise PdfMismatch(
+                f"Your question did not match anything in your PDF(s): {err}. "
+                "Nothing was written, because the answer would not come from your documents. "
+                "Try one of these: use words that appear in the PDF "
+                "(for example 'What skills are listed in this resume?'), ask something general "
+                "like 'Summarize this document', or choose 'Only the web' if the question "
+                "is not about your PDFs."
+            )
         if result["total"] == 0:
             hint = result["web_error"] or (
-                "Try rewording the question, uploading a relevant PDF, "
-                "or ticking 'Also search the web'."
+                "Try rewording the question or uploading a relevant PDF."
             )
             raise PipelineError(f"No usable sources were found. {hint}")
         ctx["research"] = result

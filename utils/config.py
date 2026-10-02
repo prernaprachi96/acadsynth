@@ -31,6 +31,13 @@ DEPTH_OPTIONS = {
 
 STYLE_OPTIONS = ["Academic / formal", "Technical summary", "Plain language"]
 
+# Which sources the app may use
+SOURCE_MODES = {
+    "both": "My PDFs and the web",
+    "pdf":  "Only my PDFs",
+    "web":  "Only the web",
+}
+
 
 def _settings() -> dict:
     return st.session_state.setdefault("settings", {})

@@ -21,18 +21,18 @@ def render():
 
         key, source = find_api_key()
         if key:
-            st.success(f"Gemini API key is set (from {source}).", icon=":material/check_circle:")
+            st.success(f"OK: Gemini API key is set (from {source}).", icon=":material/check_circle:")
         else:
-            st.error("Gemini API key is missing. The app cannot write anything without it.",
+            st.error("Problem: Gemini API key is missing. The app cannot write anything without it.",
                      icon=":material/error:")
             if st.button("Add my key in Settings", key="home_goto_settings"):
                 nav.go("settings")
 
         stats = source_stats()
         if stats:
-            st.success(f"{len(stats)} PDF(s) in your library.", icon=":material/check_circle:")
+            st.success(f"OK: {len(stats)} PDF(s) in your library.", icon=":material/check_circle:")
         else:
-            st.info("No PDFs uploaded yet. That is fine: without PDFs the app searches the web.",
+            st.info("Note: no PDFs uploaded yet. That is fine: without PDFs the app searches the web.",
                     icon=":material/info:")
 
     if st.button("Start a new query", type="primary", key="home_goto_query"):

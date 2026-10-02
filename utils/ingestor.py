@@ -20,6 +20,7 @@ from utils.embedder import embed_texts
 
 CHROMA_DIR = Path(__file__).resolve().parent.parent / "chroma_db"
 COLLECTION = "academic_sources"
+CHUNK_OVERLAP = 80   # words shared between neighbouring chunks
 
 _client = None
 
@@ -46,7 +47,7 @@ def read_pdf(file_bytes: bytes) -> str:
     return "\n".join(text)
 
 
-def chunk_text(text: str, chunk_size: int = 400, overlap: int = 80) -> list:
+def chunk_text(text: str, chunk_size: int = 400, overlap: int = CHUNK_OVERLAP) -> list:
     """Split text into overlapping chunks of about `chunk_size` words."""
     words = text.split()
     chunks = []
@@ -109,6 +110,19 @@ def source_stats() -> dict:
     result = get_collection().get(include=["metadatas"])
     metas = result.get("metadatas") or []
     return dict(sorted(Counter(m["source"] for m in metas).items()))
+
+
+def read_source_text(filename: str, max_words: int = 10000) -> str:
+    """The whole text of one PDF (chunks put back in order, overlap removed)."""
+    res = get_collection().get(where={"source": filename},
+                               include=["documents", "metadatas"])
+    pairs = sorted(zip(res.get("metadatas") or [], res.get("documents") or []),
+                   key=lambda p: p[0].get("chunk_index", 0))
+    parts = []
+    for i, (_, doc) in enumerate(pairs):
+        words = doc.split()
+        parts.append(" ".join(words if i == 0 else words[CHUNK_OVERLAP:]))
+    return " ".join(" ".join(parts).split()[:max_words])
 
 
 def list_sources() -> list:
