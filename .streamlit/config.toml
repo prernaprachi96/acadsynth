@@ -1,0 +1,10 @@
+# Theme for AcadSynth. Streamlit reads this automatically on start.
+# (Your API key stays in .streamlit/secrets.toml - this file has no secrets.)
+
+[theme]
+base = "light"
+primaryColor = "#0F5C4D"
+backgroundColor = "#F6F7F9"
+secondaryBackgroundColor = "#E8EDF0"
+textColor = "#172026"
+font = "sans serif"
