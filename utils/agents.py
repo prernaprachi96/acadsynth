@@ -13,7 +13,10 @@ the previous step's output. If something is wrong, a step raises
 PipelineError with a message that tells you how to fix it.
 """
 
-from utils.config import find_api_key
+import streamlit as st
+
+from utils.config import (find_api_key, is_local_mode, shared_key_limit,
+                          shared_runs_left, using_shared_key)
 from utils.formatter import format_output
 from utils.history import save_run
 from utils.ingestor import source_count
@@ -43,6 +46,17 @@ def run_step(agent_name: str, query: str, config: dict, ctx: dict) -> str:
         if not find_api_key()[0]:
             raise PipelineError(
                 "No Gemini API key yet. Open Settings, paste your key, and press Save key."
+            )
+        if using_shared_key() and not is_local_mode() and shared_runs_left() <= 0:
+            if shared_key_limit() == 0:
+                raise PipelineError(
+                    "This app does not share its Gemini key. Open Settings and paste your "
+                    "own free key (get one at aistudio.google.com/apikey)."
+                )
+            raise PipelineError(
+                f"You have used the {shared_key_limit()} free documents this app's shared key "
+                "allows. Open Settings and paste your own free Gemini key "
+                "(get one at aistudio.google.com/apikey) to continue."
             )
         has_library = source_count() > 0
         if config["use_pdf"] and not has_library and not config["use_web"]:
@@ -102,6 +116,8 @@ def run_step(agent_name: str, query: str, config: dict, ctx: dict) -> str:
             sources=ctx["research"]["sources"], file_bytes=file_bytes,
             filename=filename, mime=mime, model=ctx["model"],
         )
+        if using_shared_key() and not is_local_mode():
+            st.session_state["shared_runs"] = st.session_state.get("shared_runs", 0) + 1
         return f"Saved {filename}. It is also in Results."
 
     raise PipelineError(f"Unknown step: {agent_name}")

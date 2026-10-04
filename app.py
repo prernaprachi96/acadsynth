@@ -9,7 +9,7 @@ st.set_page_config(
     layout="wide",
 )
 
-from utils import nav                      # noqa: E402
+from utils import nav, session             # noqa: E402
 from utils.config import find_api_key      # noqa: E402
 from views import home, query, results, settings  # noqa: E402
 
@@ -69,6 +69,9 @@ nav.PAGES["home"]     = st.Page(home.render,     title="Overview",  icon=":mater
 nav.PAGES["query"]    = st.Page(query.render,    title="New query", icon=":material/edit_note:",   url_path="new-query")
 nav.PAGES["results"]  = st.Page(results.render,  title="Results",   icon=":material/folder_open:", url_path="results")
 nav.PAGES["settings"] = st.Page(settings.render, title="Settings",  icon=":material/settings:",    url_path="settings")
+
+session.touch()          # keeps this visitor's files alive
+session.cleanup_old()    # removes files of visitors gone for 24 hours
 
 page = st.navigation(list(nav.PAGES.values()))
 

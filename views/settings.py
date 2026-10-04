@@ -1,9 +1,11 @@
 """views/settings.py - API key, model, and your PDF library."""
 import streamlit as st
 
-from utils.config import DEFAULT_MODEL, find_api_key
+from utils.config import (DEFAULT_MODEL, find_api_key, is_local_mode, shared_key_limit,
+                          shared_runs_left, using_shared_key)
 from utils.ingestor import clear_library, delete_source, source_stats
 from utils.synthesizer import SynthesisError, list_models
+from utils.ui import storage_notice
 
 
 def render():
@@ -22,6 +24,13 @@ def render():
         else:
             st.error("Problem: no key found yet.", icon=":material/error:")
 
+        if using_shared_key() and not is_local_mode():
+            if shared_key_limit() == 0:
+                st.info("Note: the app owner's key is not shared. Paste your own key below.")
+            else:
+                st.info(f"Note: you are using the app owner's shared key. "
+                        f"{shared_runs_left()} of {shared_key_limit()} free documents left. "
+                        "Paste your own key below to remove this limit.")
         st.caption("Get a free key at aistudio.google.com/apikey. No credit card needed.")
         new_key = st.text_input("Paste your key here", type="password", key="key_input")
         if st.button("Save key", type="primary", key="save_key"):
@@ -57,6 +66,8 @@ def render():
     # ── 3. Library ───────────────────────────────────────────────────────────
     with st.container(border=True):
         st.subheader("3. Your PDF library")
+        if storage_notice():
+            st.caption(storage_notice())
         stats = source_stats()
         if not stats:
             st.info("Note: no PDFs yet. Add them on the New query page.", icon=":material/info:")

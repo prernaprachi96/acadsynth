@@ -3,12 +3,14 @@ import streamlit as st
 
 from utils import nav
 from utils.history import delete_run, list_runs, read_file
-from utils.ui import pretty_date, sources_markdown
+from utils.ui import pretty_date, sources_markdown, storage_notice
 
 
 def render():
     st.title("Results")
     st.write("Every document you have created, newest first.")
+    if storage_notice():
+        st.info("Note: " + storage_notice())
 
     runs = list_runs()
     if not runs:

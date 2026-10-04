@@ -27,7 +27,7 @@ def get_model():
 
 def embed_texts(texts: list) -> list:
     """Convert a list of texts into a list of vectors (used when adding PDFs)."""
-    return get_model().encode(texts, show_progress_bar=False).tolist()
+    return get_model().encode(texts, batch_size=16, show_progress_bar=False).tolist()
 
 
 def embed_query(query: str) -> list:

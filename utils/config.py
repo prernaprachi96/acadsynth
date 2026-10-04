@@ -66,6 +66,41 @@ def find_api_key():
     return "", ""
 
 
+def _secret(name: str, default=""):
+    """Read a setting from secrets.toml, then from the environment."""
+    try:
+        value = st.secrets.get(name, None)
+    except Exception:
+        value = None
+    if value is None:
+        value = os.environ.get(name, default)
+    return value
+
+
+def is_local_mode() -> bool:
+    """True only if you set LOCAL_MODE = true (your own computer)."""
+    return str(_secret("LOCAL_MODE", "")).strip().lower() in ("1", "true", "yes")
+
+
+def shared_key_limit() -> int:
+    """How many documents each visitor may make with the app's own key (0 = none)."""
+    try:
+        return max(0, int(_secret("SHARED_KEY_RUN_LIMIT", 5)))
+    except (TypeError, ValueError):
+        return 5
+
+
+def using_shared_key() -> bool:
+    """True if the key in use belongs to the app owner, not to the visitor."""
+    key, source = find_api_key()
+    return bool(key) and source != "the Settings page"
+
+
+def shared_runs_left() -> int:
+    used = st.session_state.get("shared_runs", 0)
+    return max(0, shared_key_limit() - used)
+
+
 def get_api_key() -> str:
     return find_api_key()[0]
 

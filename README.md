@@ -112,6 +112,7 @@ acadsynth/
     ├── ingestor.py         Reads PDFs and stores them in ChromaDB
     ├── embedder.py         Turns text into embeddings
     ├── history.py          Saves every run in the outputs/ folder
+    ├── session.py          Keeps each visitor's PDFs and results private
     ├── config.py           API key, model and dropdown options
     ├── nav.py, ui.py       Small helpers
 ```
@@ -132,8 +133,9 @@ Folders created automatically when you use the app: `chroma_db/` (your PDF libra
 3. **Create the file `.streamlit/secrets.toml`** and put your key in it:
    ```toml
    GEMINI_API_KEY = "paste-your-key-here"
+   LOCAL_MODE = true
    ```
-   (Or skip this and paste the key on the app's **Settings** page. That only lasts until you close the browser tab.)
+   `LOCAL_MODE = true` keeps your PDFs and documents in the project folders on your own computer. (You can also skip the key here and paste it on the app's **Settings** page. That only lasts until you close the browser tab.)
 4. **Start the app:**
    ```powershell
    streamlit run app.py
@@ -184,3 +186,27 @@ The first time you upload a PDF, the app downloads a small language model (about
 | **Synthesis** | Combining information from many sources into one summary |
 | **Citation** | A label like `[PDF Source 1]` showing where a statement came from |
 | **API key** | A password that lets the app use Gemini |
+
+---
+
+## 13. Putting it online (Streamlit Community Cloud)
+
+1. Push the project to GitHub (the file `.streamlit/secrets.toml` is never uploaded).
+2. At <https://share.streamlit.io> choose **Create app**, pick the repository, branch `main` and main file `app.py`.
+3. In **Advanced settings** choose Python 3.12 and paste this into **Secrets**:
+   ```toml
+   GEMINI_API_KEY = "your-key"
+   SHARED_KEY_RUN_LIMIT = 5
+   ```
+   Do **not** add `LOCAL_MODE` online.
+4. Press **Deploy**. Every `git push` updates the live app.
+
+**How visitors are protected online**
+
+- **Private libraries:** every visitor gets their own PDF library and Results. Nobody can see anyone else's files.
+- **Temporary files:** if a visitor refreshes or reopens the page they start empty, and leftover files are deleted after 24 hours.
+- **Shared key limit:** each visitor can create `SHARED_KEY_RUN_LIMIT` documents with the owner's key, then must paste their own free key in **Settings**. Set it to `0` so that everybody must use their own key. (A visitor can get around this limit by refreshing the page, so it protects you from accidents, not from determined misuse.)
+- **Upload limits:** PDFs up to 20 MB, and very long PDFs are cut at about 128,000 words.
+- **Sleeping app:** a free app sleeps after a period without visitors. Open the link and press the wake-up button, then wait a moment.
+- **Out of memory:** if you see "This app has gone over its resource limits", open **Manage app** (bottom right, when signed in) and choose **Reboot**.
+- **Only invited people:** in the app press **Share** and choose **Only specific people can view this app**, then add emails. A free account allows one private app.

@@ -1,6 +1,9 @@
 # Black and white theme for AcadSynth. Streamlit reads this automatically.
 # (Your API key stays in .streamlit/secrets.toml - this file has no secrets.)
 
+[server]
+maxUploadSize = 20   # MB per PDF
+
 [theme]
 base = "light"
 primaryColor = "#000000"

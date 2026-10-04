@@ -5,7 +5,7 @@ from utils import agents, nav
 from utils.config import (DEPTH_OPTIONS, FORMAT_OPTIONS, SOURCE_MODES,
                           STYLE_OPTIONS, find_api_key)
 from utils.ingestor import ingest_pdf, source_stats
-from utils.ui import sources_markdown
+from utils.ui import sources_markdown, storage_notice
 
 
 def render():
@@ -22,8 +22,10 @@ def render():
     # ── Step 1: PDFs ─────────────────────────────────────────────────────────
     with st.container(border=True):
         st.subheader("1. Add your papers (optional)")
-        st.caption("PDF files only. They stay on this computer. "
+        st.caption("PDF files only, up to 20 MB each. "
                    "Skip this step if you only want a web search.")
+        if storage_notice():
+            st.caption(storage_notice())
         files = st.file_uploader("PDF files", type=["pdf"], accept_multiple_files=True,
                                  label_visibility="collapsed")
         _handle_uploads(files or [])
@@ -107,6 +109,9 @@ def _handle_uploads(files):
         res = log[key]
         if res["status"] == "ok":
             st.success(f"Done: {f.name} added ({res['chunks']} passages).")
+            if res.get("truncated"):
+                st.info(f"Note: {f.name} is very long, so only its first {res['chunks']} "
+                        "passages were added.")
         else:
             st.error(f"Problem: {f.name}. {res['message']}")
 

@@ -16,22 +16,31 @@ from pathlib import Path
 import chromadb
 import fitz  # PyMuPDF
 
+from utils import session
 from utils.embedder import embed_texts
 
-CHROMA_DIR = Path(__file__).resolve().parent.parent / "chroma_db"
-COLLECTION = "academic_sources"
 CHUNK_OVERLAP = 80   # words shared between neighbouring chunks
+MAX_CHUNKS = 400     # a very long PDF is cut here (about 128,000 words)
 
 _client = None
+_client_path = None
+
+
+def get_client():
+    """Connect to ChromaDB (the folder is created automatically)."""
+    global _client, _client_path
+    path = str(session.chroma_dir())
+    if _client is None or _client_path != path:
+        Path(path).mkdir(parents=True, exist_ok=True)
+        _client = chromadb.PersistentClient(path=path)
+        _client_path = path
+    return _client
 
 
 def get_collection():
-    """Connect to ChromaDB (created automatically the first time)."""
-    global _client
-    if _client is None:
-        _client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-    return _client.get_or_create_collection(
-        name=COLLECTION,
+    """This visitor's own library (in private mode) or your local one."""
+    return get_client().get_or_create_collection(
+        name=session.collection_name(),
         metadata={"hnsw:space": "cosine"},
     )
 
@@ -85,6 +94,9 @@ def ingest_pdf(file_bytes: bytes, filename: str) -> dict:
     if not chunks:
         return {"status": "error", "message": "The PDF had too little text to use."}
 
+    truncated = len(chunks) > MAX_CHUNKS
+    chunks = chunks[:MAX_CHUNKS]
+
     collection = get_collection()
 
     # Replace any older copy of the same file
@@ -100,7 +112,8 @@ def ingest_pdf(file_bytes: bytes, filename: str) -> dict:
         embeddings=embed_texts(chunks),
         metadatas=[{"source": filename, "chunk_index": i} for i in range(len(chunks))],
     )
-    return {"status": "ok", "chunks": len(chunks), "source": filename}
+    return {"status": "ok", "chunks": len(chunks), "source": filename,
+            "truncated": truncated}
 
 
 # ── Looking at and cleaning the library ───────────────────────────────────────
