@@ -31,6 +31,13 @@ DEPTH_OPTIONS = {
 
 STYLE_OPTIONS = ["Academic / formal", "Technical summary", "Plain language"]
 
+# One short explanation under each source choice
+SOURCE_HELP = {
+    "both": "Reads your PDFs first, then adds background from the web.",
+    "pdf":  "Uses only the PDFs you uploaded.",
+    "web":  "Searches the internet only. Use this if the question is not about your PDFs.",
+}
+
 # Which sources the app may use
 SOURCE_MODES = {
     "both": "My PDFs and the web",
@@ -107,3 +114,17 @@ def get_api_key() -> str:
 
 def get_model() -> str:
     return _settings().get("model") or DEFAULT_MODEL
+
+
+def key_status() -> str:
+    """
+    "ready"      - a key can be used right now
+    "own_needed" - the owner's key is not available to you: paste your own in Settings
+    "missing"    - no key anywhere
+    """
+    key, _ = find_api_key()
+    if not key:
+        return "missing"
+    if using_shared_key() and not is_local_mode() and shared_runs_left() <= 0:
+        return "own_needed"
+    return "ready"

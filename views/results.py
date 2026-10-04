@@ -8,14 +8,14 @@ from utils.ui import pretty_date, sources_markdown, storage_notice
 
 def render():
     st.title("Results")
-    st.write("Every document you have created, newest first.")
+    st.markdown('<p class="lead">Every document you have created, newest first.</p>',
+                unsafe_allow_html=True)
     if storage_notice():
-        st.info("Note: " + storage_notice())
+        st.info(storage_notice())
 
     runs = list_runs()
     if not runs:
-        st.info("Note: no documents yet. Create your first one on the New query page.",
-                icon=":material/info:")
+        st.write("No documents yet. Create your first one on the New query page.")
         if st.button("Go to New query", type="primary", key="results_goto_query"):
             nav.go("query")
         return
@@ -30,7 +30,7 @@ def render():
              and (fmt == "All types" or r["format"] == fmt)]
 
     if not shown:
-        st.warning("Note: nothing matches. Clear the search or choose 'All types'.")
+        st.warning("Nothing matches. Clear the search or choose 'All types'.")
         return
 
     for run in shown:
@@ -44,7 +44,7 @@ def render():
                                    file_name=run["filename"], mime=run["mime"],
                                    type="primary", key=f"dl_{run['id']}")
             except FileNotFoundError:
-                st.warning("Problem: the document file is missing from the outputs folder.")
+                st.error("The document file is missing from the outputs folder.")
 
             st.markdown(run["synthesis"])
             st.markdown("**Sources used**")
@@ -56,7 +56,7 @@ def render():
 
 def _delete_controls(run_id: str):
     if st.session_state.get("confirm_delete") == run_id:
-        st.warning("Warning: delete this result and its file? This cannot be undone.")
+        st.warning("Delete this result and its file? This cannot be undone.")
         yes, no = st.columns(2)
         if yes.button("Yes, delete", key=f"yes_{run_id}", type="primary"):
             delete_run(run_id)

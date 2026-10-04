@@ -8,7 +8,7 @@ maxUploadSize = 20   # MB per PDF
 base = "light"
 primaryColor = "#000000"
 backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F0F0F0"
+secondaryBackgroundColor = "#F2F2F2"
 textColor = "#000000"
 linkColor = "#000000"
 borderColor = "#000000"
@@ -16,16 +16,16 @@ showWidgetBorder = true
 baseRadius = "small"
 font = "sans serif"
 
-# Keep status colours black and white too
-redColor = "#000000"
-orangeColor = "#000000"
-yellowColor = "#000000"
-greenColor = "#000000"
-blueColor = "#000000"
+# Colour is used ONLY for messages (success, error, warning, information).
+greenColor = "#1B7A46"
+redColor = "#B42318"
+orangeColor = "#B54708"
+yellowColor = "#B54708"
+blueColor = "#1D4F9F"
 violetColor = "#000000"
 grayColor = "#000000"
 
 [theme.sidebar]
 backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F0F0F0"
+secondaryBackgroundColor = "#F2F2F2"
 textColor = "#000000"

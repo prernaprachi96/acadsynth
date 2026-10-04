@@ -2,30 +2,35 @@
 import streamlit as st
 
 from utils import agents, nav
-from utils.config import (DEPTH_OPTIONS, FORMAT_OPTIONS, SOURCE_MODES,
-                          STYLE_OPTIONS, find_api_key)
+from utils.config import (DEPTH_OPTIONS, FORMAT_OPTIONS, SOURCE_HELP, SOURCE_MODES,
+                          STYLE_OPTIONS, key_status)
 from utils.ingestor import ingest_pdf, source_stats
 from utils.ui import sources_markdown, storage_notice
 
 
+def _label(text: str):
+    st.markdown(f'<div class="eyebrow">{text}</div>', unsafe_allow_html=True)
+
+
 def render():
     st.title("New query")
-    st.write("Three steps: add your papers (optional), ask your question, then download the document.")
+    st.markdown('<p class="lead">Follow the three steps below, from top to bottom.</p>',
+                unsafe_allow_html=True)
 
-    has_key = bool(find_api_key()[0])
-    if not has_key:
-        st.error("Problem: add your Gemini API key first. Without it the app cannot write the document.",
-                 icon=":material/error:")
-        if st.button("Go to Settings", key="query_goto_settings"):
+    status = key_status()
+    if status != "ready":
+        if status == "missing":
+            st.error("You need a Gemini key before you can create a document.")
+        else:
+            st.warning("You need your own free Gemini key before you can create a document.")
+        if st.button("Go to Settings to add it", key="query_goto_settings"):
             nav.go("settings")
 
     # ── Step 1: PDFs ─────────────────────────────────────────────────────────
     with st.container(border=True):
-        st.subheader("1. Add your papers (optional)")
-        st.caption("PDF files only, up to 20 MB each. "
-                   "Skip this step if you only want a web search.")
-        if storage_notice():
-            st.caption(storage_notice())
+        _label("Step 1 of 3, optional")
+        st.subheader("Add your papers")
+        st.write("Drop your PDF files below. Skip this step to search only the web.")
         files = st.file_uploader("PDF files", type=["pdf"], accept_multiple_files=True,
                                  label_visibility="collapsed")
         _handle_uploads(files or [])
@@ -34,48 +39,57 @@ def render():
         if stats:
             st.caption("In your library now: " + ", ".join(stats.keys()))
         else:
-            st.caption("Your library is empty.")
+            st.caption("Your library is empty. PDF files only, up to 20 MB each.")
+        if storage_notice():
+            st.caption(storage_notice())
 
     # ── Step 2: question + options ───────────────────────────────────────────
     with st.container(border=True):
-        st.subheader("2. Ask your question")
+        _label("Step 2 of 3")
+        st.subheader("Ask your question")
+        st.write("Write your question in a full sentence, then choose where the answer "
+                 "should come from.")
         with st.form("query_form", border=False):
             question = st.text_area(
-                "Your research question",
-                placeholder="Example: What are the main skills and projects in this resume?",
-                height=120,
+                "Your question",
+                placeholder="Example: What are the main findings of this paper?",
+                height=110,
             )
+            st.caption("Short requests such as 'Summarize this document' also work.")
 
             mode = st.radio(
-                "Sources to use", list(SOURCE_MODES), horizontal=True,
+                "Where should the answer come from?", list(SOURCE_MODES),
                 format_func=SOURCE_MODES.get,
-                help="'My PDFs and the web' reads your PDFs first, then adds background "
-                     "from the web as a separate section of the report.",
+                captions=list(SOURCE_HELP.values()),
             )
             if stats:
-                pdf_files = st.multiselect("PDFs to use", list(stats), default=list(stats))
+                pdf_files = st.multiselect("Which PDFs to use", list(stats),
+                                           default=list(stats))
             else:
                 pdf_files = []
-                st.caption("No PDFs in your library, so only the web will be searched.")
 
-            c1, c2, c3 = st.columns(3)
-            fmt = c1.selectbox("Document type", list(FORMAT_OPTIONS),
+            fmt = st.selectbox("File type to create", list(FORMAT_OPTIONS),
                                format_func=FORMAT_OPTIONS.get)
-            depth = c2.selectbox("How much to read", list(DEPTH_OPTIONS), index=1,
-                                 format_func=lambda k: DEPTH_OPTIONS[k][0],
-                                 help="'Per source' means up to this many passages from your "
-                                      "PDFs and up to this many results from the web.")
-            style = c3.selectbox("Writing style", STYLE_OPTIONS)
+            with st.expander("More options"):
+                depth = st.selectbox(
+                    "How much to read", list(DEPTH_OPTIONS), index=1,
+                    format_func=lambda k: DEPTH_OPTIONS[k][0],
+                    help="Up to this many passages from your PDFs and up to this many "
+                         "results from the web.")
+                style = st.selectbox("Writing style", STYLE_OPTIONS)
+
             submitted = st.form_submit_button("Create document", type="primary",
-                                              disabled=not has_key)
+                                              disabled=(status != "ready"))
 
     # ── Step 3: result ───────────────────────────────────────────────────────
     with st.container(border=True):
-        st.subheader("3. Your document")
+        _label("Step 3 of 3")
+        st.subheader("Your document")
 
+        fresh = False
         if submitted:
             if len(question.strip()) < 3:
-                st.warning("Warning: write your question in step 2 first.")
+                st.warning("Write your question in step 2 first.")
                 return
             config = {
                 "format": fmt,
@@ -88,12 +102,14 @@ def render():
             }
             if not _run(question.strip(), config):
                 return  # the message is already on screen
+            fresh = True
 
         run = st.session_state.get("last_run")
         if run:
-            _show_run(run)
+            _show_run(run, fresh)
         else:
-            st.caption("Your document will appear here after you press Create document.")
+            st.write("Press **Create document** in step 2. It usually takes about a minute, "
+                     "and your file will appear here.")
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -104,16 +120,17 @@ def _handle_uploads(files):
     for f in files:
         key = f"{f.name}:{f.size}"
         if key not in log:
-            with st.spinner(f"Reading {f.name}. The first PDF also downloads a small language model (about 80 MB)."):
+            with st.spinner(f"Reading {f.name}. The first PDF also downloads a small "
+                            "language model (about 80 MB)."):
                 log[key] = ingest_pdf(f.getvalue(), f.name)
         res = log[key]
         if res["status"] == "ok":
-            st.success(f"Done: {f.name} added ({res['chunks']} passages).")
+            st.success(f"{f.name} was added ({res['chunks']} passages).")
             if res.get("truncated"):
-                st.info(f"Note: {f.name} is very long, so only its first {res['chunks']} "
+                st.info(f"{f.name} is very long, so only its first {res['chunks']} "
                         "passages were added.")
         else:
-            st.error(f"Problem: {f.name}. {res['message']}")
+            st.error(f"{f.name} could not be added. {res['message']}")
 
 
 def _run(question: str, config: dict) -> bool:
@@ -127,17 +144,17 @@ def _run(question: str, config: dict) -> bool:
             except agents.PdfMismatch as err:
                 status.update(label="Stopped: your question did not match your PDFs",
                               state="error", expanded=True)
-                st.warning(f"Warning: {err}")
+                st.warning(str(err))
                 return False
             except agents.PipelineError as err:
                 status.update(label=f"Stopped at the {name} step", state="error", expanded=True)
-                st.error(f"Problem: {err}")
+                st.error(str(err))
                 return False
             except Exception as err:  # anything unexpected
                 status.update(label=f"Stopped at the {name} step", state="error", expanded=True)
-                st.error(f"Problem: something unexpected went wrong in the {name} step: {err}")
+                st.error(f"Something unexpected went wrong in the {name} step: {err}")
                 return False
-            st.markdown(f"Done: {message}")
+            st.markdown(f"Finished: {message}")
         status.update(label="Done. Your document is ready.", state="complete", expanded=False)
 
     data, filename, mime = ctx["file"]
@@ -152,12 +169,14 @@ def _run(question: str, config: dict) -> bool:
     return True
 
 
-def _show_run(run: dict):
+def _show_run(run: dict, fresh: bool):
     ext = run["filename"].rsplit(".", 1)[-1].upper()
+    if fresh:
+        st.success("Your document is ready. Download it below.")
     st.download_button(f"Download {ext} file", data=run["bytes"],
                        file_name=run["filename"], mime=run["mime"],
                        type="primary", key="download_last_run")
-    st.caption("Also saved in Results, so you can come back to it later.")
+    st.caption("A copy is also saved on the Results page.")
     st.divider()
     st.markdown(run["synthesis"])
     with st.expander("Sources used"):
