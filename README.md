@@ -150,12 +150,12 @@ The first time you upload a PDF, the app downloads a small language model (about
 
 ## 9. Try it
 
-1. Upload a PDF paper.
+1. Upload a PDF paper. (one or many)
 2. Ask: *"What are the main findings of this paper?"*
 3. Keep **My PDFs and the web** selected and press **Create document**.
 4. Open the **Sources used** list. You should see `PDF Source` entries from your paper and `Web Source` entries with links.
 
----
+
 
 ## 10. Limitations
 
